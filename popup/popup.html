@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Eizz Settings</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <!-- Header Bar -->
+  <div class="header">
+    <div class="brand">
+      <div class="logo">E</div>
+      <div>
+        <div class="title">Eizz Analyzer</div>
+        <div class="version">v1.0.0 • Job QoL Tool</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Power Switch -->
+  <div class="toggle-card">
+    <div class="toggle-info">
+      <span class="toggle-title">Extension Active</span>
+      <span class="toggle-sub">Highlight experience & skills</span>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="toggle-enabled" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <!-- Custom Skills Section -->
+  <div class="section">
+    <div class="section-title">
+      <span>⭐ Custom Target Skills</span>
+      <span style="font-size:10px; color:#94a3b8;">Gold Highlight</span>
+    </div>
+    <div class="input-row">
+      <input type="text" id="skill-input" class="skill-input" placeholder="e.g. Next.js, Docker, PyTorch...">
+      <button id="add-btn" class="add-btn">Add</button>
+    </div>
+    <div id="chips-container" class="chips-wrapper">
+      <!-- Dynamic chips injected here -->
+    </div>
+  </div>
+
+  <!-- Supported Portals Bar -->
+  <div class="sites-bar">
+    <div class="site-badge">💼 LinkedIn</div>
+    <div class="site-badge">🔍 Indeed</div>
+    <div class="site-badge">🏢 Glassdoor</div>
+    <div class="site-badge">🌱 Greenhouse</div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
