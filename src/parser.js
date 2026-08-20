@@ -58,10 +58,11 @@
    * Main analyze function
    * @param {string} text - The job description raw text
    * @param {Array<string>} customSkills - Optional user-defined custom keywords to highlight
+   * @param {Object} metadata - Optional companyName, jobTitle metadata from page
    */
-  function analyzeJobDescription(text, customSkills = []) {
+  function analyzeJobDescription(text, customSkills = [], metadata = {}) {
     if (!text || typeof text !== 'string') {
-      return getEmptyAnalysis();
+      return getEmptyAnalysis(metadata);
     }
 
     const cleanText = text.replace(/\s+/g, ' ').trim();
@@ -72,6 +73,8 @@
     const contextSentences = extractContextSentences(cleanText, experienceData.matches);
 
     return {
+      companyName: metadata.companyName || extractCompanyFromText(cleanText) || 'Company Detected',
+      jobTitle: metadata.jobTitle || 'Job Posting',
       experience: experienceData,
       skills: skillsData,
       education: educationData,
@@ -81,14 +84,26 @@
   }
 
   /**
+   * Heuristic fallback to extract company name from text if not passed by DOM selector
+   */
+  function extractCompanyFromText(text) {
+    const match = text.match(/(?:at|about|join|with)\s+([A-Z][A-Za-z0-9\s&,-]{2,30})(?:\s+is|\s+we|\s+is looking|\.|\,)/);
+    if (match && match[1]) {
+      const company = match[1].trim();
+      if (!['The', 'Our', 'We', 'This', 'Join'].includes(company)) {
+        return company;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Extract Experience requirements
    */
   function extractExperience(text) {
     const experienceMatches = [];
     const yearRanges = [];
 
-    // Regex 1: Explicit years range or minimum years
-    // Examples: "3+ years", "5-7 years", "at least 2 years of experience", "minimum 4 yrs"
     const expRegexes = [
       /\b(?:at\s+least|minimum|min\.?|up\s+to|over|more\s+than)?\s*(\d{1,2})\s*(?:\+|–|-|to)\s*(\d{1,2})?\s*(?:years?|yrs?)\b(?:\s+(?:of\s+)?(?:relevant\s+)?experience)?/gi,
       /\b(\d{1,2})\s*\+\s*(?:years?|yrs?)\b(?:\s+(?:of\s+)?(?:relevant\s+)?experience)?/gi,
@@ -104,7 +119,6 @@
           experienceMatches.push(fullMatchStr);
         }
 
-        // Extract numbers if present
         const num1 = parseInt(match[1], 10);
         const num2 = parseInt(match[2], 10);
         if (!isNaN(num1)) {
@@ -116,7 +130,6 @@
       }
     });
 
-    // Summary calculation
     let minYears = 0;
     let maxYears = 0;
     let summaryText = "Not Specified";
@@ -131,7 +144,6 @@
         summaryText = `${minYears} - ${maxYears} Years`;
       }
     } else {
-      // Check level hints
       const lower = text.toLowerCase();
       if (lower.includes('fresher') || lower.includes('entry level') || lower.includes('internship')) {
         summaryText = "0 - 1 Years";
@@ -160,19 +172,13 @@
     };
   }
 
-  /**
-   * Extract Skills matching predefined taxonomy + custom user keywords
-   */
   function extractSkills(text, customSkills = []) {
     const foundSkillsByCategory = {};
     const allFoundSkills = new Set();
     const customMatches = [];
 
-    // Helper to test keyword in text using word boundaries
     function findMatches(keyword) {
-      // Escape special characters like C++, .NET, C#
       const escaped = keyword.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-      // For skills with +, # or dots, adjust word boundary
       let regexStr = `\\b${escaped}\\b`;
       if (/[+#.]/.test(keyword)) {
         regexStr = `(?:^|\\s|\\(|,)${escaped}(?:$|\\s|\\)|,|\\.)`;
@@ -183,7 +189,6 @@
       return matches ? matches.length : 0;
     }
 
-    // Iterate taxonomy
     for (const [category, skillsList] of Object.entries(SKILL_TAXONOMY)) {
       foundSkillsByCategory[category] = [];
       skillsList.forEach((skill) => {
@@ -198,7 +203,6 @@
       });
     }
 
-    // Check Custom User Skills
     if (Array.isArray(customSkills)) {
       customSkills.forEach((skill) => {
         if (!skill || typeof skill !== 'string') return;
@@ -210,7 +214,6 @@
       });
     }
 
-    // Convert category map into clean array
     const categories = [];
     for (const [catName, skills] of Object.entries(foundSkillsByCategory)) {
       if (skills.length > 0) {
@@ -229,9 +232,6 @@
     };
   }
 
-  /**
-   * Extract Education Requirements
-   */
   function extractEducation(text) {
     const found = [];
     EDUCATION_KEYWORDS.forEach((edu) => {
@@ -242,15 +242,11 @@
     return found.length > 0 ? found : ["Degree / Equivalent Experience"];
   }
 
-  /**
-   * Extract Key Context Sentences mentioning Experience or Requirements
-   */
   function extractContextSentences(text, expMatches) {
     const sentences = text.split(/(?<=[.!?])\s+/);
     const relevant = [];
 
     sentences.forEach((sentence) => {
-      const lower = sentence.toLowerCase();
       const hasExp = expMatches.some(m => sentence.includes(m)) || 
                      /experience|years|yrs|required|qualifications|must have/i.test(sentence);
       
@@ -262,11 +258,13 @@
       }
     });
 
-    return relevant.slice(0, 4); // Top 4 key context sentences
+    return relevant.slice(0, 4);
   }
 
-  function getEmptyAnalysis() {
+  function getEmptyAnalysis(metadata = {}) {
     return {
+      companyName: metadata.companyName || 'Company Detected',
+      jobTitle: metadata.jobTitle || 'Job Posting',
       experience: { summary: "Not Specified", minYears: 0, maxYears: 0, levelTag: "Unknown", matches: [] },
       skills: { totalUniqueCount: 0, categories: [], customMatches: [], flatList: [] },
       education: [],
@@ -275,7 +273,6 @@
     };
   }
 
-  // Export for node or browser window environment
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { analyzeJobDescription, SKILL_TAXONOMY };
   } else {

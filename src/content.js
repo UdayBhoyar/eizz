@@ -38,6 +38,32 @@
     '[data-automation-id="jobPostingDescription"]'
   ];
 
+  const COMPANY_SELECTORS = [
+    // Mock / Local Demo
+    '#job-company',
+    '.company-info',
+
+    // LinkedIn
+    '.jobs-unified-top-card__company-name',
+    '.job-details-jobs-unified-top-card__company-name',
+    '.jobs-details-top-card__company-url',
+    '.jobs-company__name',
+    'a[href*="/company/"]',
+
+    // Indeed
+    '[data-testid="inlineHeader-companyName"]',
+    '.jobsearch-CompanyReview--heading',
+    '.jobsearch-JobInfoHeader-companyName',
+
+    // Glassdoor
+    '[data-test="employer-name"]',
+    '.EmployerProfile_employerName',
+
+    // Greenhouse & Lever
+    '.company-name',
+    '.posting-header h2'
+  ];
+
   class ContentController {
     constructor() {
       this.overlay = null;
@@ -48,7 +74,6 @@
     }
 
     async init() {
-      // Read settings
       await this.loadSettings();
 
       if (!this.isEnabled) {
@@ -56,19 +81,14 @@
         return;
       }
 
-      // Initialize overlay UI
       if (typeof EizzOverlay !== 'undefined') {
         this.overlay = new EizzOverlay();
         await this.overlay.mount();
       }
 
-      // Initial scan
       this.scanPage();
-
-      // Observe DOM changes for single-page applications (LinkedIn/Indeed job switching)
       this.setupMutationObserver();
 
-      // Expose controller globally for manual triggers
       window.EizzContentController = this;
     }
 
@@ -76,7 +96,7 @@
       return new Promise((resolve) => {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
           chrome.storage.sync.get(['enabled', 'customSkills'], (result) => {
-            this.isEnabled = result.enabled !== false; // Default true
+            this.isEnabled = result.enabled !== false;
             this.customSkills = result.customSkills || [];
             resolve();
           });
@@ -86,11 +106,7 @@
       });
     }
 
-    /**
-     * Find job description container using targeted selectors or heuristic algorithm
-     */
     findJobDescriptionText() {
-      // 1. Try platform-specific selectors
       for (const selector of PLATFORM_SELECTORS) {
         const el = document.querySelector(selector);
         if (el && el.innerText && el.innerText.trim().length > 100) {
@@ -98,7 +114,6 @@
         }
       }
 
-      // 2. Fallback Heuristic: find block with highest frequency of job keywords
       const candidates = document.querySelectorAll('article, section, main, div');
       let bestCandidate = null;
       let maxScore = 0;
@@ -107,7 +122,6 @@
 
       candidates.forEach((el) => {
         const text = el.innerText || '';
-        // Skip body / giant wrappers
         if (text.length < 150 || text.length > 25000) return;
 
         const lower = text.toLowerCase();
@@ -125,14 +139,29 @@
       return bestCandidate || document.body.innerText || '';
     }
 
+    findCompanyName() {
+      for (const selector of COMPANY_SELECTORS) {
+        const el = document.querySelector(selector);
+        if (el && el.innerText && el.innerText.trim().length > 0) {
+          return el.innerText.split('—')[0].split('•')[0].trim();
+        }
+      }
+      return null;
+    }
+
     scanPage() {
       const text = this.findJobDescriptionText();
-      if (!text || text === this.lastScannedText) return;
+      const companyName = this.findCompanyName();
+
+      if (!text || (text === this.lastScannedText && companyName === this.lastCompanyName)) return;
 
       this.lastScannedText = text;
+      this.lastCompanyName = companyName;
 
       if (typeof EizzParser !== 'undefined' && this.overlay) {
-        const analysis = EizzParser.analyzeJobDescription(text, this.customSkills);
+        const analysis = EizzParser.analyzeJobDescription(text, this.customSkills, {
+          companyName: companyName
+        });
         this.overlay.render(analysis);
       }
     }
@@ -143,7 +172,7 @@
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
           this.scanPage();
-        }, 600); // 600ms debounce
+        }, 600);
       });
 
       this.observer.observe(document.body, {
@@ -153,7 +182,6 @@
     }
   }
 
-  // Auto initialize on DOM ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       const controller = new ContentController();

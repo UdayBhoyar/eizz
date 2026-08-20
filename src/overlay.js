@@ -1,5 +1,6 @@
 /**
  * Eizz - Shadow DOM Overlay Interface Engine
+ * Features fixed & draggable positioning, company name display, and Shadow DOM isolation.
  */
 
 (function (exports) {
@@ -19,7 +20,7 @@
       border-radius: 18px;
       color: #f8fafc;
       box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: box-shadow 0.3s ease;
       overflow: hidden;
       pointer-events: auto;
     }
@@ -28,30 +29,38 @@
     }
     .eizz-container.eizz-collapsed {
       width: 52px; height: 52px; border-radius: 26px; overflow: hidden;
-      cursor: pointer; background: linear-gradient(135deg, #7c3aed, #06b6d4);
+      cursor: grab; background: linear-gradient(135deg, #7c3aed, #06b6d4);
       box-shadow: 0 10px 30px rgba(124, 58, 237, 0.6);
       border: 2px solid rgba(255, 255, 255, 0.4);
     }
+    .eizz-container.eizz-collapsed:active { cursor: grabbing; }
     .eizz-collapsed-btn {
       display: flex; align-items: center; justify-content: center;
       width: 100%; height: 100%; color: #ffffff; font-size: 22px; font-weight: 800;
+      user-select: none;
     }
     .eizz-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 16px; background: rgba(30, 41, 59, 0.85);
+      padding: 12px 16px; background: rgba(30, 41, 59, 0.9);
       border-bottom: 1px solid rgba(255, 255, 255, 0.1); user-select: none;
+      cursor: grab;
     }
+    .eizz-header:active { cursor: grabbing; }
     .eizz-brand { display: flex; align-items: center; gap: 10px; }
     .eizz-logo {
       width: 30px; height: 30px; background: linear-gradient(135deg, #7c3aed, #06b6d4);
       border-radius: 8px; display: flex; align-items: center; justify-content: center;
       font-weight: 800; font-size: 15px; color: #ffffff;
-      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4); flex-shrink: 0;
     }
-    .eizz-title-wrap { display: flex; flex-direction: column; }
-    .eizz-title { font-size: 14px; font-weight: 700; color: #ffffff; }
-    .eizz-subtitle { font-size: 11px; color: #94a3b8; font-weight: 500; }
+    .eizz-title-wrap { display: flex; flex-direction: column; overflow: hidden; }
+    .eizz-title { font-size: 13px; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 4px; }
+    .eizz-company-tag {
+      font-size: 11px; color: #38bdf8; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;
+    }
     .eizz-actions { display: flex; align-items: center; gap: 6px; }
+    .eizz-drag-handle { font-size: 12px; color: #64748b; margin-right: 4px; }
     .eizz-icon-btn {
       background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12);
       color: #cbd5e1; width: 28px; height: 28px; border-radius: 8px;
@@ -97,6 +106,8 @@
       this.container = null;
       this.isCollapsed = false;
       this.latestAnalysis = null;
+      this.isDragging = false;
+      this.dragOffset = { x: 0, y: 0 };
     }
 
     /**
@@ -110,29 +121,111 @@
         return;
       }
 
-      // Create host element fixed to top-right
+      // Create host element with fixed positioning
       this.hostElement = document.createElement('div');
       this.hostElement.id = 'eizz-host-root';
       this.hostElement.style.position = 'fixed';
-      this.hostElement.style.top = '20px';
-      this.hostElement.style.right = '20px';
-      this.hostElement.style.zIndex = '2147483647'; // Highest z-index
-      this.hostElement.style.pointerEvents = 'none'; // Only container takes clicks
+      
+      // Load saved position or default to top-right
+      const savedPos = this.loadSavedPosition();
+      if (savedPos) {
+        this.hostElement.style.top = savedPos.top + 'px';
+        this.hostElement.style.left = savedPos.left + 'px';
+      } else {
+        this.hostElement.style.top = '20px';
+        this.hostElement.style.right = '20px';
+      }
+
+      this.hostElement.style.zIndex = '2147483647';
+      this.hostElement.style.pointerEvents = 'none';
 
       // Attach shadow root
       this.shadowRoot = this.hostElement.attachShadow({ mode: 'open' });
 
-      // Embed CSS inside Shadow DOM
+      // Embed CSS
       const style = document.createElement('style');
       style.textContent = EMBEDDED_CSS;
       this.shadowRoot.appendChild(style);
 
-      // Create main container
+      // Create container
       this.container = document.createElement('div');
       this.container.className = 'eizz-container';
       this.shadowRoot.appendChild(this.container);
 
       document.body.appendChild(this.hostElement);
+
+      // Attach Drag Listeners
+      this.setupDraggable();
+    }
+
+    loadSavedPosition() {
+      try {
+        const data = localStorage.getItem('eizz_overlay_pos');
+        return data ? JSON.parse(data) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    savePosition(top, left) {
+      try {
+        localStorage.setItem('eizz_overlay_pos', JSON.stringify({ top, left }));
+      } catch (e) {}
+    }
+
+    /**
+     * Setup drag handling for moving the window anywhere on screen
+     */
+    setupDraggable() {
+      let isMouseDown = false;
+      let startX = 0, startY = 0;
+      let initialLeft = 0, initialTop = 0;
+
+      const onMouseDown = (e) => {
+        // Only trigger drag if clicking header or drag target, not action buttons
+        if (e.target.closest('.eizz-actions') || e.target.closest('button')) return;
+
+        isMouseDown = true;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        const rect = this.hostElement.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+
+        // Clear right positioning once user starts dragging so left/top takes over
+        this.hostElement.style.right = 'auto';
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      };
+
+      const onMouseMove = (e) => {
+        if (!isMouseDown) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        let newLeft = Math.max(10, Math.min(window.innerWidth - 60, initialLeft + dx));
+        let newTop = Math.max(10, Math.min(window.innerHeight - 60, initialTop + dy));
+
+        this.hostElement.style.left = newLeft + 'px';
+        this.hostElement.style.top = newTop + 'px';
+
+        this.savePosition(newTop, newLeft);
+      };
+
+      const onMouseUp = () => {
+        isMouseDown = false;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      };
+
+      // Delegate mousedown to header / collapsed btn
+      this.shadowRoot.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.eizz-header') || e.target.closest('.eizz-collapsed-btn')) {
+          onMouseDown(e);
+        }
+      });
     }
 
     /**
@@ -147,14 +240,12 @@
         return;
       }
 
-      const { experience, skills, education, contextSentences } = analysis;
+      const { companyName, experience, skills, education, contextSentences } = analysis;
 
-      // Classify level tag CSS class
       let levelClass = 'eizz-level-mid';
       if (experience.levelTag.includes('Senior')) levelClass = 'eizz-level-senior';
       if (experience.levelTag.includes('Entry')) levelClass = 'eizz-level-entry';
 
-      // Custom skill tags HTML
       let customSkillsHtml = '';
       if (skills.customMatches && skills.customMatches.length > 0) {
         const customPills = skills.customMatches.map(s => 
@@ -171,7 +262,6 @@
         `;
       }
 
-      // Categories HTML
       let categoriesHtml = '';
       if (skills.categories && skills.categories.length > 0) {
         categoriesHtml = skills.categories.map(cat => {
@@ -189,7 +279,6 @@
         categoriesHtml = `<div style="font-size:12px; color:#94a3b8;">No standard tech keywords detected.</div>`;
       }
 
-      // Context Sentences HTML
       let contextHtml = '';
       if (contextSentences && contextSentences.length > 0) {
         const items = contextSentences.map(c => `<div class="eizz-context-item">"${escapeHtml(c)}"</div>`).join('');
@@ -201,18 +290,18 @@
         `;
       }
 
-      // Main inner HTML template
       this.container.className = 'eizz-container';
       this.container.innerHTML = `
-        <div class="eizz-header">
+        <div class="eizz-header" title="Drag to move overlay">
           <div class="eizz-brand">
             <div class="eizz-logo">E</div>
             <div class="eizz-title-wrap">
               <div class="eizz-title">Eizz Quick Analysis</div>
-              <div class="eizz-subtitle">Experience & Skill Scanner</div>
+              <div class="eizz-company-tag">🏢 ${escapeHtml(companyName)}</div>
             </div>
           </div>
           <div class="eizz-actions">
+            <span class="eizz-drag-handle" title="Drag overlay">:::</span>
             <button class="eizz-icon-btn" id="eizz-btn-reparse" title="Re-scan Page">⚡</button>
             <button class="eizz-icon-btn" id="eizz-btn-collapse" title="Collapse Overlay">─</button>
           </div>
@@ -270,14 +359,14 @@
     renderCollapsedView() {
       this.container.className = 'eizz-container eizz-collapsed';
       this.container.innerHTML = `
-        <div class="eizz-collapsed-btn" id="eizz-btn-expand" title="Expand Eizz Overlay">
+        <div class="eizz-collapsed-btn" id="eizz-btn-expand" title="Drag to move or click to expand">
           ⚡
         </div>
       `;
 
       const expandBtn = this.shadowRoot.getElementById('eizz-btn-expand');
       if (expandBtn) {
-        expandBtn.onclick = () => {
+        expandBtn.onclick = (e) => {
           this.isCollapsed = false;
           if (this.latestAnalysis) this.render(this.latestAnalysis);
         };
@@ -310,9 +399,10 @@
 
     copyToClipboard() {
       if (!this.latestAnalysis) return;
-      const { experience, skills } = this.latestAnalysis;
+      const { companyName, experience, skills } = this.latestAnalysis;
 
       const summaryText = `[Eizz Job Analysis Summary]
+Company: ${companyName}
 Experience Required: ${experience.summary} (${experience.levelTag})
 Key Skills: ${skills.flatList.join(', ')}
 Total Skills Detected: ${skills.totalUniqueCount}`;
@@ -339,7 +429,6 @@ Total Skills Detected: ${skills.totalUniqueCount}`;
       .replace(/'/g, '&#039;');
   }
 
-  // Export
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { EizzOverlay };
   } else {
