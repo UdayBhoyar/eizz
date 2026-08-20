@@ -4,9 +4,24 @@
 
 ---
 
+## 📦 How to Download & Share with Others
+
+### Option 1: Direct ZIP Download (Easiest for Friends & Users)
+
+1. Download the pre-packaged zip file:
+   👉 **[Download eizz-extension-v1.0.0.zip](https://github.com/UdayBhoyar/eizz/archive/refs/tags/v1.0.0.zip)**
+2. Unzip `eizz-extension-v1.0.0.zip` on your computer.
+3. Open **Chrome** or **Edge** and go to `chrome://extensions` (or `edge://extensions`).
+4. Turn **ON** **Developer mode** in the top-right corner.
+5. Click **Load unpacked** and select the unzipped `Eizz` folder.
+
+---
+
 ## ✨ Features
 
 - 💼 **Experience Requirement Scanner**: Instantly extracts required years (e.g., `3-5 Years`, `5+ Years`) and labels the experience level (`Senior Level`, `Mid Level`, `Entry / Junior`).
+- 🏢 **Company Name Header**: Scans and displays the company name directly in the header (e.g., `🏢 TechCorp Global`).
+- 🖐️ **Draggable Anywhere**: Click and drag the overlay window anywhere on your viewport.
 - 🛠️ **Categorized Key Skills Taxonomy**: Groups required skills into *Languages*, *Frontend*, *Backend & APIs*, *Cloud & DevOps*, *Databases*, *AI/ML*, *Testing & Tools*, and *Soft Skills*.
 - ⭐ **Custom Target Skills**: Highlight your specific target skills in gold (configurable via extension popup).
 - 🛡️ **Isolated Shadow DOM Overlay**: Rendered inside a Shadow DOM container, ensuring 100% style isolation without CSS interference from complex job site stylesheets.
@@ -48,23 +63,6 @@ Eizz/
     ├── test-parser.js    # Node.js automated test suite
     └── mock-job.html     # Interactive standalone test job board simulator
 ```
-
----
-
-## 🚀 Quick Start & Installation
-
-### 1. Load Unpacked Extension in Chrome / Edge
-
-1. Clone or download this repository:
-   ```bash
-   git clone https://github.com/UdayBhoyar/eizz.git
-   ```
-2. Open **Chrome** or **Edge** and navigate to:
-   - Chrome: `chrome://extensions`
-   - Edge: `edge://extensions`
-3. Enable **Developer mode** (toggle in the top-right corner).
-4. Click **Load unpacked** and select the `Eizz` root folder.
-5. Pin the **Eizz** extension icon to your toolbar.
 
 ---
 
